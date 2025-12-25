@@ -3,19 +3,24 @@
 <head>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    async function main() {
-      await liff.init({ liffId: "2008778355-5GpPrZiT" }); //2008778355-5GpPrZiT
-      if (!liff.isLoggedIn()) {
-        liff.login();
-      } else {
-        const profile = await liff.getProfile();
-        const userId = profile.userId;
-        // 自動的にStripeの決済URLにIDをくっつけて飛ばす
-        window.location.href = "https://buy.stripe.com/4gM3cw5wS335eaX2JScQU03?client_reference_id=" + userId;
-      }
-    }
-    main();
+    window.onload = function() {
+      liff.init({ liffId: "2008778355-5GpprZiT" })
+        .then(() => {
+          if (!liff.isLoggedIn()) {
+            liff.login();
+          } else {
+            liff.getProfile().then(profile => {
+              const userId = profile.userId;
+              // Stripeへジャンプ！
+              window.location.href = "https://buy.stripe.com/4gM3cw5w5335eaX2JScQU03?client_reference_id=" + userId;
+            });
+          }
+        })
+        .catch((err) => {
+          document.body.innerHTML = "エラー発生: " + err;
+        });
+    };
   </script>
 </head>
-<body> IDを確認中...少々お待ちください。</body>
+<body> IDを確認してStripeへ移動します...</body>
 </html>
