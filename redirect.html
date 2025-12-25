@@ -3,24 +3,25 @@
 <head>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    window.onload = function() {
-      liff.init({ liffId: "2008778355-5GpprZiT" })
-        .then(() => {
-          if (!liff.isLoggedIn()) {
-            liff.login();
-          } else {
-            liff.getProfile().then(profile => {
-              const userId = profile.userId;
-              // Stripeへジャンプ！
-              window.location.href = "https://buy.stripe.com/4gM3cw5w5335eaX2JScQU03?client_reference_id=" + userId;
-            });
-          }
-        })
-        .catch((err) => {
-          document.body.innerHTML = "エラー発生: " + err;
-        });
-    };
+    async function main() {
+      try {
+        // LIFF IDを正確に指定して初期化
+        await liff.init({ liffId: "2008778355-5GpprZiT" });
+        
+        if (!liff.isLoggedIn()) {
+          liff.login();
+        } else {
+          const profile = await liff.getProfile();
+          const userId = profile.userId;
+          // IDをくっつけてStripeへ強制ジャンプ！
+          window.location.href = "https://buy.stripe.com/4gM3cw5w5335eaX2JScQU03?client_reference_id=" + userId;
+        }
+      } catch (error) {
+        document.body.innerHTML = "エラーが発生しました: " + error.message;
+      }
+    }
+    main();
   </script>
 </head>
-<body> IDを確認してStripeへ移動します...</body>
+<body>LINE IDを確認してStripeへ移動中...</body>
 </html>
