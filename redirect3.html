@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    async function main() {
+      await liff.init({ liffId: "2008778444-6zKI4323" }); //2008778444-6zKI4323
+      if (!liff.isLoggedIn()) {
+        liff.login();
+      } else {
+        const profile = await liff.getProfile();
+        const userId = profile.userId;
+        // 自動的にStripeの決済URLにIDをくっつけて飛ばす
+        window.location.href = "https://buy.stripe.com/xxxxxx?client_reference_id=" + userId;
+      }
+    }
+    main();
+  </script>
+</head>
+<body>LINE IDを確認中...少々お待ちください。</body>
+</html>
