@@ -1,41 +1,53 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LINE連携テスト</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     async function main() {
       try {
-        alert("テスト1：プログラム起動成功！");
+        // --- 設定エリア：ここをプランごとに書き換える ---
+        const myLiffId = "2008778355-5GpprZiT"; // LINE DevelopersのLIFF ID
+        const stripeUrl = "https://buy.stripe.com/4gM3cw5wS335eaX2JScQU03"; // StripeのURL
+        // ------------------------------------------
 
-        // 【重要】ここを各プランのLIFF IDに書き換えてください
-        const myLiffId = "2008778355-5GpprZiT"; 
-        
+        alert("【テスト1】開始します。LIFF ID: " + myLiffId);
+
+        // LIFFの初期化
         await liff.init({ liffId: myLiffId });
-        alert("テスト2：LIFFの初期化に成功しました！");
+        alert("【テスト2】LIFFの初期化に成功しました！");
 
+        // ログインチェック
         if (!liff.isLoggedIn()) {
-          alert("テスト3：ログインしていないので、ログイン画面へ飛びます");
+          alert("【テスト3】未ログインのため、ログイン画面へ移動します。");
           liff.login();
         } else {
+          // ユーザー情報の取得
           const profile = await liff.getProfile();
           const userId = profile.userId;
-          alert("テスト4：ID取得成功！IDは " + userId + " です。決済画面へ飛びます。");
+          alert("【テスト4】ログイン確認済み！\nあなたのLINE ID: " + userId);
 
-          // 【重要】ここを各プランのStripe URLに書き換えてください
-          const stripeUrl = "https://buy.stripe.com/4gM3cw5wS335eaX2JScQU03";
-          window.location.href = stripeUrl + "?client_reference_id=" + userId;
+          // Stripeへジャンプ
+          const finalUrl = stripeUrl + "?client_reference_id=" + userId;
+          alert("【最終テスト】Stripeへ移動します。\nURL: " + finalUrl);
+          
+          window.location.href = finalUrl;
         }
       } catch (error) {
-        alert("エラー発生： " + error.message);
-        document.body.innerHTML = "エラー詳細: " + error.message;
+        alert("❌エラーが発生しました\n内容: " + error.message);
+        console.error(error);
       }
     }
-    main();
+
+    // ページが読み込まれたら実行
+    window.onload = main;
   </script>
 </head>
-<body>
-  <h1>テスト実行中...</h1>
-  <p>画面のメッセージに従ってください。</p>
+<body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+  <h2>自動転送テスト中</h2>
+  <p>ポップアップが表示されたら「OK」を押してください。</p>
+  <p>エラーが出る場合は、その内容を教えてください。</p>
 </body>
 </html>
