@@ -14,7 +14,7 @@
 
       // 設定値（ここだけ変えればOK）
       const LIFF_ID = "2008778355-5GpPrZiT";
-      const STRIPE_BASE_URL = "https://buy.stripe.com/4gM28sbVggTVc2P84ccQU04"; // ←シルバーのPayment Link
+      const STRIPE_BASE_URL = "https://buy.stripe.com/4gM28sbVggTVc2P84ccQU04"; // シルバーのPayment Link（パラメータ無しでテスト）
 
       try {
         statusEl.textContent = "LIFF初期化中...";
@@ -27,32 +27,16 @@
           return;
         }
 
-        statusEl.textContent = "プロフィール取得中...";
-        const profile = await liff.getProfile();
-        const userId = profile.userId;
+        // ここではプロフィール取得もしません（= userIdも取らない）
+        // 目的：client_reference_id を付けた時だけ壊れるかどうかの切り分け
 
-        // URLを安全に組み立て（? & の事故回避）
-        const url = new URL(STRIPE_BASE_URL);
-        url.searchParams.set("client_reference_id", userId);
+        statusEl.textContent = "決済画面へ移動します（パラメータ無しテスト）...";
 
-        statusEl.textContent = "外部ブラウザで決済画面を開きます...";
-
-        // ★LINE外部ブラウザ起動の挙動対策：external=trueで外部ブラウザを強制
+        // ★重要：外部ブラウザで開く（LINE内WebView問題を回避）
         liff.openWindow({
-          url: url.toString(),
+          url: STRIPE_BASE_URL,
           external: true
         });
-
-        // ★LINE外部ブラウザ起動の挙動対策：LIFF画面を閉じる（端末によって挙動が安定）
-        // すぐ閉じると開き切る前に閉じる端末があるので少し待つ
-        setTimeout(() => {
-          try {
-            // LIFF内で開かれている場合のみ有効（外部ブラウザでは何もしない）
-            liff.closeWindow();
-          } catch (e) {
-            // closeWindowが効かない環境もあるので握りつぶし
-          }
-        }, 400);
 
       } catch (e) {
         console.error(e);
