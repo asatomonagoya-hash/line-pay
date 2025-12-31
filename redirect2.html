@@ -6,43 +6,31 @@
   <script>
     async function main() {
       const statusEl = document.getElementById("status");
-
       try {
         statusEl.textContent = "LIFF初期化中...";
         await liff.init({ liffId: "2008778355-5GpPrZiT" });
 
         if (!liff.isLoggedIn()) {
           statusEl.textContent = "LINEログインへ遷移します...";
-          // 戻り先を明示
           liff.login({ redirectUri: location.href });
           return;
         }
 
         statusEl.textContent = "プロフィール取得中...";
-        const profile = await liff.getProfile();
-        const userId = profile.userId;
+        const { userId } = await liff.getProfile();
 
-        // Stripeへ渡すURL（念のためencode）
-        const stripeUrl =
-          "https://buy.stripe.com/4gM28sbVggTVc2P84ccQU04"
-          + "?client_reference_id=" + encodeURIComponent(userId);
+        const base = "https://buy.stripe.com/4gM28sbVggTVc2P84ccQU04";
+        const url = new URL(base);
+        url.searchParams.set("client_reference_id", userId);
 
         statusEl.textContent = "決済画面へ移動します...";
-
-        // ★重要：外部ブラウザで開く（LINE内WebView問題を回避）
-        liff.openWindow({
-          url: stripeUrl,
-          external: true
-        });
+        liff.openWindow({ url: url.toString(), external: true });
 
       } catch (e) {
         console.error(e);
-        statusEl.textContent =
-          "エラーが発生しました：\n" +
-          (e && e.message ? e.message : JSON.stringify(e));
+        statusEl.textContent = "エラー:\n" + (e?.message ?? JSON.stringify(e));
       }
     }
-
     window.addEventListener("load", main);
   </script>
 </head>
