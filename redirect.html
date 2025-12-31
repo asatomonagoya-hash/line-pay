@@ -1,27 +1,41 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     async function main() {
       try {
-        // LIFF IDを正確に指定して初期化
-        await liff.init({ liffId: "2008778355-5GpPrZiT" });
+        alert("テスト1：プログラム起動成功！");
+
+        // 【重要】ここを各プランのLIFF IDに書き換えてください
+        const myLiffId = "2008778355-5GpprZiT"; 
         
+        await liff.init({ liffId: myLiffId });
+        alert("テスト2：LIFFの初期化に成功しました！");
+
         if (!liff.isLoggedIn()) {
+          alert("テスト3：ログインしていないので、ログイン画面へ飛びます");
           liff.login();
         } else {
           const profile = await liff.getProfile();
           const userId = profile.userId;
-          // IDをくっつけてStripeへ強制ジャンプ！
-          window.location.href = "https://buy.stripe.com/4gM3cw5wS335eaX2JScQU03?client_reference_id=" + userId;
+          alert("テスト4：ID取得成功！IDは " + userId + " です。決済画面へ飛びます。");
+
+          // 【重要】ここを各プランのStripe URLに書き換えてください
+          const stripeUrl = "https://buy.stripe.com/4gM3cw5wS335eaX2JScQU03";
+          window.location.href = stripeUrl + "?client_reference_id=" + userId;
         }
       } catch (error) {
-        document.body.innerHTML = "エラーが発生しました: " + error.message;
+        alert("エラー発生： " + error.message);
+        document.body.innerHTML = "エラー詳細: " + error.message;
       }
     }
     main();
   </script>
 </head>
-<body>LINE IDを確認してStripeへ移動中...</body>
+<body>
+  <h1>テスト実行中...</h1>
+  <p>画面のメッセージに従ってください。</p>
+</body>
 </html>
