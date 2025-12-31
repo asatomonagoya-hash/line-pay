@@ -1,21 +1,52 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     async function main() {
-      await liff.init({ liffId: "2008778444-6zKI4323" }); //2008778444-6zKI4323
-      if (!liff.isLoggedIn()) {
-        liff.login();
-      } else {
+      const statusEl = document.getElementById("status");
+
+      try {
+        statusEl.textContent = "LIFF初期化中...";
+        await liff.init({ liffId: "2008778355-5GpPrZiT" });
+
+        if (!liff.isLoggedIn()) {
+          statusEl.textContent = "LINEログインへ遷移します...";
+          // 戻り先を明示
+          liff.login({ redirectUri: location.href });
+          return;
+        }
+
+        statusEl.textContent = "プロフィール取得中...";
         const profile = await liff.getProfile();
         const userId = profile.userId;
-        // 自動的にStripeの決済URLにIDをくっつけて飛ばす
-        window.location.href = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05?client_reference_id=" + userId;
+
+        // Stripeへ渡すURL（念のためencode）
+        const stripeUrl =
+          "https://buy.stripe.com/4gM3cw5wS335eaX2JScQU03"
+          + "?client_reference_id=" + encodeURIComponent(userId);
+
+        statusEl.textContent = "決済画面へ移動します...";
+
+        // ★重要：外部ブラウザで開く（LINE内WebView問題を回避）
+        liff.openWindow({
+          url: stripeUrl,
+          external: true
+        });
+
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent =
+          "エラーが発生しました：\n" +
+          (e && e.message ? e.message : JSON.stringify(e));
       }
     }
-    main();
+
+    window.addEventListener("load", main);
   </script>
 </head>
-<body>LINE IDを確認中...少々お待ちください。</body>
+<body>
+  <pre id="status">起動中...</pre>
+</body>
 </html>
