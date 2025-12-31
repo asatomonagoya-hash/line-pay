@@ -10,7 +10,6 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
-  <!-- LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
   <script>
@@ -18,38 +17,31 @@
       const statusEl = document.getElementById("status");
 
       // === ゴールド会員 用設定 ===
-      const LIFF_ID = "2008778444-6zKl4323"; // ゴールドのLIFF ID
-      const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05"; // ゴールド Payment Link
+      const LIFF_ID = "2008778444-6zKl4323"; // ★ゴールドのLIFF ID（ここが重要）
+      const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
 
       try {
-        // 1) LIFF初期化（※必ず https://liff.line.me/{LIFF_ID} 経由で起動）
         statusEl.textContent = "LIFF初期化中...";
         await liff.init({ liffId: LIFF_ID });
 
-        // 2) 未ログインならログイン（戻り先を固定）
         if (!liff.isLoggedIn()) {
           statusEl.textContent = "LINEログインへ遷移します...";
           liff.login({ redirectUri: window.location.href });
           return;
         }
 
-        // 3) userId取得
         statusEl.textContent = "プロフィール取得中...";
         const { userId } = await liff.getProfile();
 
-        // 4) Stripe URL を安全に組み立て（?/&事故防止）
+        // URLを安全に組み立て（連結ではなくURL API）
         const url = new URL(STRIPE_PAYMENT_LINK);
         url.searchParams.set("client_reference_id", userId);
 
-        // 5) 外部ブラウザでStripeを開く（LINE内WebView回避）
         statusEl.textContent = "外部ブラウザで決済画面を開きます...";
         liff.openWindow({
           url: url.toString(),
           external: true
         });
-
-        // 端末依存の不具合が出る場合のみ有効化（通常は不要）
-        // setTimeout(() => { try { liff.closeWindow(); } catch (e) {} }, 500);
 
       } catch (e) {
         console.error(e);
