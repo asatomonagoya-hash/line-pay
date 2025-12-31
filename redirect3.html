@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ゴールド会員 決済へ移動中...</title>
 
-  <!-- キャッシュ対策（LINE内で古いHTMLが残ることがあるため） -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
@@ -17,13 +16,23 @@
       const statusEl = document.getElementById("status");
 
       // === ゴールド会員 用設定 ===
-      const LIFF_ID = "2008778444-6zKl4323"; // ★ゴールドのLIFF ID（ここが重要）
+      const LIFF_ID = "2008778444-6zKl4323";
       const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
 
       try {
         statusEl.textContent = "LIFF初期化中...";
         await liff.init({ liffId: LIFF_ID });
 
+        // ★LINEアプリ内で開かれているかチェック（原因切り分け）
+        if (!liff.isInClient()) {
+          statusEl.textContent =
+            "LINEアプリ内で開けていない可能性があります。\n" +
+            "リッチメニューから開き直してください。\n\n" +
+            "現在のURL:\n" + location.href;
+          return;
+        }
+
+        // 未ログインならログイン（戻り先を固定）
         if (!liff.isLoggedIn()) {
           statusEl.textContent = "LINEログインへ遷移します...";
           liff.login({ redirectUri: window.location.href });
@@ -33,15 +42,15 @@
         statusEl.textContent = "プロフィール取得中...";
         const { userId } = await liff.getProfile();
 
-        // URLを安全に組み立て（連結ではなくURL API）
+        // URLを安全に組み立て（文字列連結しない）
         const url = new URL(STRIPE_PAYMENT_LINK);
         url.searchParams.set("client_reference_id", userId);
 
         statusEl.textContent = "外部ブラウザで決済画面を開きます...";
-        liff.openWindow({
-          url: url.toString(),
-          external: true
-        });
+        liff.openWindow({ url: url.toString(), external: true });
+
+        // ※端末によってはLIFF画面を閉じた方が安定する場合があります（必要なら有効化）
+        // setTimeout(() => { try { liff.closeWindow(); } catch (e) {} }, 500);
 
       } catch (e) {
         console.error(e);
