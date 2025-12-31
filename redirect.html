@@ -6,7 +6,7 @@
     async function main() {
       try {
         // LIFF IDを正確に指定して初期化
-        await liff.init({ liffId: "2008778355-5GpprZiT" });
+        await liff.init({ liffId: "2008778355-5GpPrZiT" });
         
         if (!liff.isLoggedIn()) {
           liff.login();
@@ -14,7 +14,7 @@
           const profile = await liff.getProfile();
           const userId = profile.userId;
           // IDをくっつけてStripeへ強制ジャンプ！
-          window.location.href = "https://buy.stripe.com/4gM3cw5w5335eaX2JScQU03?client_reference_id=" + userId;
+          window.location.href = "https://buy.stripe.com/4gM3cw5wS335eaX2JScQU03?client_reference_id=" + userId;
         }
       } catch (error) {
         document.body.innerHTML = "エラーが発生しました: " + error.message;
