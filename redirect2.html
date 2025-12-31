@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>決済へ移動中...</title>
+  <title>シルバー会員 決済へ移動中...</title>
 
   <!-- LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -12,31 +12,40 @@
     async function main() {
       const statusEl = document.getElementById("status");
 
-      // 設定値（ここだけ変えればOK）
-      const LIFF_ID = "2008778355-5GpPrZiT";
-      const STRIPE_BASE_URL = "https://buy.stripe.com/4gM28sbVggTVc2P84ccQU04"; // シルバーのPayment Link（パラメータ無しでテスト）
+      // === シルバー会員 用設定 ===
+      const LIFF_ID = "2008778413-XN1noaJM"; // ← 画像のシルバーLIFF ID
+      const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/4gM28sbVggTVc2P84ccQU04"; // ← シルバーPayment Link
 
       try {
+        // 1) LIFF初期化（※必ず https://liff.line.me/{LIFF_ID} 経由で起動）
         statusEl.textContent = "LIFF初期化中...";
         await liff.init({ liffId: LIFF_ID });
 
-        // ログインしていなければログインへ（戻り先を明示）
+        // 2) 未ログインならログイン（戻り先を固定）
         if (!liff.isLoggedIn()) {
           statusEl.textContent = "LINEログインへ遷移します...";
           liff.login({ redirectUri: window.location.href });
           return;
         }
 
-        // ここではプロフィール取得もしません（= userIdも取らない）
-        // 目的：client_reference_id を付けた時だけ壊れるかどうかの切り分け
+        // 3) userId取得
+        statusEl.textContent = "プロフィール取得中...";
+        const profile = await liff.getProfile();
+        const userId = profile.userId;
 
-        statusEl.textContent = "決済画面へ移動します（パラメータ無しテスト）...";
+        // 4) Stripe URL を安全に組み立て（?/& やエンコード事故を回避）
+        const url = new URL(STRIPE_PAYMENT_LINK);
+        url.searchParams.set("client_reference_id", userId);
 
-        // ★重要：外部ブラウザで開く（LINE内WebView問題を回避）
+        // 5) 外部ブラウザでStripeを開く（LINE内WebView回避）
+        statusEl.textContent = "外部ブラウザで決済画面を開きます...";
         liff.openWindow({
-          url: STRIPE_BASE_URL,
+          url: url.toString(),
           external: true
         });
+
+        // 端末依存の不具合が出る場合のみ有効化（通常は不要）
+        // setTimeout(() => { try { liff.closeWindow(); } catch (e) {} }, 500);
 
       } catch (e) {
         console.error(e);
