@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ゴールド会員 決済へ移動中...</title>
 
+  <!-- LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
+
 <body>
   <pre id="status">起動中...</pre>
 
@@ -14,15 +16,13 @@
     async function main() {
       const statusEl = document.getElementById("status");
 
-      // ★ LIFF ID（ゴールド）
+      // === ゴールド会員専用 ===
       const LIFF_ID = "2008778444-6zKl4323";
-
-      // ★ Stripe Payment Link（ゴールド）
       const STRIPE_PAYMENT_LINK =
         "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
 
       try {
-        // ① LIFF初期化（※ liff.line.me から来た時だけ成功）
+        // ① LIFF初期化（1回のみ）
         statusEl.textContent = "LIFF初期化中...";
         await liff.init({ liffId: LIFF_ID });
 
