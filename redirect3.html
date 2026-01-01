@@ -5,38 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ゴールド会員 決済へ移動中...</title>
 
-  <!-- キャッシュ対策（LINE内で古いHTMLが残ることがあるため） -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-
+  <!-- LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans JP', sans-serif; padding: 16px;">
+  <pre id="status" style="white-space: pre-wrap; word-break: break-word;">起動中...</pre>
 
   <script>
+    const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
+
     async function main() {
       const statusEl = document.getElementById("status");
 
-      // === ゴールド会員 用設定 ===
-      const LIFF_ID = "2008778444-6zKl4323"; // ゴールドのLIFF ID
-      const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05"; // ゴールドPayment Link
-
       try {
+        // ✅ liff.init は1回だけ
         statusEl.textContent = "LIFF初期化中...";
-        await liff.init({ liffId: LIFF_ID });
+        await liff.init(); // ← LIFF IDをあえて書かない（1文字違い事故を根絶）
 
-        if (!liff.isLoggedIn()) {
-          statusEl.textContent = "LINEログインへ遷移します...";
-          liff.login({ redirectUri: window.location.href });
+        // ✅ HTMLはLIFFからのみアクセス（それ以外はブロック）
+        // ※外部ブラウザで直接URLを開いた時など
+        if (!liff.isInClient() && !liff.isLoggedIn()) {
+          statusEl.textContent =
+            "このページはLINEのLIFFから起動してください。\n" +
+            "（リッチメニューのリンクが https://liff.line.me/... になっているか確認）";
           return;
         }
 
+        // 未ログインならログイン
+        if (!liff.isLoggedIn()) {
+          statusEl.textContent = "LINEログイン中...";
+          liff.login(); // redirectUriは通常不要（必要なら付けてもOK）
+          return;
+        }
+
+        // userId取得
         statusEl.textContent = "プロフィール取得中...";
         const { userId } = await liff.getProfile();
 
-        // Stripe URL を安全に生成（?/&事故防止）
+        // Stripe URL生成
         const url = new URL(STRIPE_PAYMENT_LINK);
         url.searchParams.set("client_reference_id", userId);
 
+        // ✅ 決済は external: true
         statusEl.textContent = "外部ブラウザで決済画面を開きます...";
         liff.openWindow({
           url: url.toString(),
@@ -46,16 +57,11 @@
       } catch (e) {
         console.error(e);
         statusEl.textContent =
-          "エラーが発生しました：\n" +
-          (e && e.message ? e.message : JSON.stringify(e));
+          "エラー：\n" + (e?.message || JSON.stringify(e));
       }
     }
 
     window.addEventListener("load", main);
   </script>
-</head>
-
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans JP', sans-serif; padding: 16px;">
-  <pre id="status" style="white-space: pre-wrap; word-break: break-word;">起動中...</pre>
 </body>
 </html>
