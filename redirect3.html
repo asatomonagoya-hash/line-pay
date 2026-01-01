@@ -1,67 +1,40 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ゴールド会員 決済へ移動中...</title>
+<script>
+  async function main() {
+    const statusEl = document.getElementById("status");
 
-  <!-- LIFF SDK -->
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-</head>
+    // ★ リッチメニューと完全一致させる
+    const LIFF_ID = "2008805355-pfJagaTF";
 
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans JP', sans-serif; padding: 16px;">
-  <pre id="status" style="white-space: pre-wrap; word-break: break-word;">起動中...</pre>
+    const STRIPE_PAYMENT_LINK =
+      "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
 
-  <script>
-    const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
+    try {
+      statusEl.textContent = "LIFF初期化中...";
+      await liff.init({ liffId: LIFF_ID });
 
-    async function main() {
-      const statusEl = document.getElementById("status");
-
-      try {
-        // ✅ liff.init は1回だけ
-        statusEl.textContent = "LIFF初期化中...";
-        await liff.init(); // ← LIFF IDをあえて書かない（1文字違い事故を根絶）
-
-        // ✅ HTMLはLIFFからのみアクセス（それ以外はブロック）
-        // ※外部ブラウザで直接URLを開いた時など
-        if (!liff.isInClient() && !liff.isLoggedIn()) {
-          statusEl.textContent =
-            "このページはLINEのLIFFから起動してください。\n" +
-            "（リッチメニューのリンクが https://liff.line.me/... になっているか確認）";
-          return;
-        }
-
-        // 未ログインならログイン
-        if (!liff.isLoggedIn()) {
-          statusEl.textContent = "LINEログイン中...";
-          liff.login(); // redirectUriは通常不要（必要なら付けてもOK）
-          return;
-        }
-
-        // userId取得
-        statusEl.textContent = "プロフィール取得中...";
-        const { userId } = await liff.getProfile();
-
-        // Stripe URL生成
-        const url = new URL(STRIPE_PAYMENT_LINK);
-        url.searchParams.set("client_reference_id", userId);
-
-        // ✅ 決済は external: true
-        statusEl.textContent = "外部ブラウザで決済画面を開きます...";
-        liff.openWindow({
-          url: url.toString(),
-          external: true
-        });
-
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent =
-          "エラー：\n" + (e?.message || JSON.stringify(e));
+      if (!liff.isLoggedIn()) {
+        statusEl.textContent = "LINEログイン中...";
+        liff.login();
+        return;
       }
-    }
 
-    window.addEventListener("load", main);
-  </script>
-</body>
-</html>
+      statusEl.textContent = "プロフィール取得中...";
+      const profile = await liff.getProfile();
+
+      const url = new URL(STRIPE_PAYMENT_LINK);
+      url.searchParams.set("client_reference_id", profile.userId);
+
+      statusEl.textContent = "決済画面を開きます...";
+      liff.openWindow({
+        url: url.toString(),
+        external: true
+      });
+
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent = "エラー：\n" + (e?.message || e);
+    }
+  }
+
+  main();
+</script>
