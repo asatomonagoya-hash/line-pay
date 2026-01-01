@@ -6,69 +6,59 @@
   <title>ゴールド会員 決済へ移動中...</title>
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <pre id="status">起動中...</pre>
 
   <script>
-    async function initLiffRobust(expectedLiffId) {
-      // 1) まずは「起動中のLIFF（liff.line.me経由）」に任せて初期化
-      try {
-        await liff.init({}); // ←ここが重要（ID固定しない）
-        return { mode: "auto" };
-      } catch (e1) {
-        // 2) ダメなら「期待LIFF ID固定」で初期化
-        await liff.init({ liffId: expectedLiffId });
-        return { mode: "fixed" };
-      }
-    }
-
     async function main() {
       const statusEl = document.getElementById("status");
 
-      const EXPECT_LIFF_ID = "2008778444-6zKl4323";
-      const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
+      // ★ LIFF ID（ゴールド）
+      const LIFF_ID = "2008778444-6zKl4323";
+
+      // ★ Stripe Payment Link（ゴールド）
+      const STRIPE_PAYMENT_LINK =
+        "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
 
       try {
-        statusEl.textContent =
-          "起動URL:\n" + location.href + "\n\n" +
-          "LIFF初期化中...";
+        // ① LIFF初期化（※ liff.line.me から来た時だけ成功）
+        statusEl.textContent = "LIFF初期化中...";
+        await liff.init({ liffId: LIFF_ID });
 
-        const { mode } = await initLiffRobust(EXPECT_LIFF_ID);
-
-        statusEl.textContent += "\nLIFF初期化OK（mode: " + mode + "）";
-
-        // LINEアプリ内か確認（外部ブラウザ直開き対策）
-        if (!liff.isInClient()) {
-          statusEl.textContent += "\n\n※LINEアプリ内で開かれていません。\nリッチメニューから開き直してください。";
-          return;
-        }
-
+        // ② 未ログインならログイン
         if (!liff.isLoggedIn()) {
-          statusEl.textContent += "\nログインへ遷移します...";
-          liff.login({ redirectUri: location.href });
+          statusEl.textContent = "LINEログイン中...";
+          liff.login();
           return;
         }
 
-        statusEl.textContent += "\nプロフィール取得中...";
+        // ③ userId取得
+        statusEl.textContent = "プロフィール取得中...";
         const profile = await liff.getProfile();
 
+        // ④ Stripe URL生成
         const url = new URL(STRIPE_PAYMENT_LINK);
-        url.searchParams.set("client_reference_id", profile.userId);
+        url.searchParams.set(
+          "client_reference_id",
+          profile.userId
+        );
 
-        statusEl.textContent += "\n外部ブラウザで決済画面を開きます...";
-        liff.openWindow({ url: url.toString(), external: true });
+        // ⑤ 外部ブラウザでStripeを開く
+        statusEl.textContent = "決済画面を開きます...";
+        liff.openWindow({
+          url: url.toString(),
+          external: true
+        });
 
       } catch (e) {
         console.error(e);
         statusEl.textContent =
-          "エラーが発生しました\n\n" +
-          "起動URL:\n" + location.href + "\n\n" +
-          "message:\n" + (e?.message || JSON.stringify(e));
+          "エラー：\n" + (e?.message || e);
       }
     }
 
-    window.addEventListener("load", main);
+    main();
   </script>
-</head>
-<body>
-  <pre id="status" style="white-space: pre-wrap; word-break: break-word;">起動中...</pre>
 </body>
 </html>
