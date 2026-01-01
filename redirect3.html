@@ -1,52 +1,54 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LINE連携テスト</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ゴールド会員 決済へ移動中...</title>
+
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
   <script>
     async function main() {
+      const statusEl = document.getElementById("status");
+
+      const LIFF_ID = "2008778444-6zKl4323";
+      const STRIPE_PAYMENT_LINK =
+        "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05";
+
       try {
-        // --- 設定エリア：ここをプランごとに確認 ---
-        const myLiffId = "2008778444-6zKI4323"; // DevelopersのLIFF IDをここにコピペ
-        const stripeUrl = "https://buy.stripe.com/8x23cw0cyeLNc2P708cQU05"; // Stripe URL
-        // ------------------------------------------
+        statusEl.textContent = "LIFF初期化中...";
+        await liff.init({ liffId: LIFF_ID });
 
-        alert("【テスト1】開始：プログラムは動いています。");
-
-        // LIFFの初期化
-        await liff.init({ liffId: myLiffId });
-        alert("【テスト2】成功：LIFFの初期化ができました！");
-
-        // ログインチェック
         if (!liff.isLoggedIn()) {
-          alert("【テスト3】未ログイン：今からログイン画面に飛びます。");
-          liff.login();
-        } else {
-          // ユーザー情報の取得
-          const profile = await liff.getProfile();
-          const userId = profile.userId;
-          alert("【テスト4】ログイン済：あなたのLINE IDを取得しました。\nID: " + userId);
-
-          // Stripeへジャンプ
-          const finalUrl = stripeUrl + "?client_reference_id=" + userId;
-          alert("【最終テスト】Stripeへ移動します。\nURL: " + finalUrl);
-          
-          window.location.href = finalUrl;
+          liff.login({ redirectUri: location.href });
+          return;
         }
-      } catch (error) {
-        alert("❌エラーが発生しました\n内容: " + error.message);
-        console.error(error);
+
+        statusEl.textContent = "プロフィール取得中...";
+        const profile = await liff.getProfile();
+
+        const url = new URL(STRIPE_PAYMENT_LINK);
+        url.searchParams.set(
+          "client_reference_id",
+          profile.userId
+        );
+
+        statusEl.textContent = "決済画面を開きます...";
+        liff.openWindow({
+          url: url.toString(),
+          external: true
+        });
+
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = "エラー：" + e.message;
       }
     }
 
-    // 画面が読み込まれたら実行
-    window.onload = main;
+    window.addEventListener("load", main);
   </script>
 </head>
-<body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
-  <h2>自動転送テスト実行中</h2>
-  <p>ポップアップが出たら「OK」を押して進めてください。</p>
+<body>
+  <pre id="status">起動中...</pre>
 </body>
 </html>
