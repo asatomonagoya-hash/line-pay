@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>フォームへ移動中...</title>
+
+  <!-- LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 24px;
+      background: #fafafa;
+    }
+    .box {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .muted {
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h3>フォームへ移動しています…</h3>
+    <p class="muted" id="status">初期化中です</p>
+  </div>
+
+  <script>
+    // ===== 設定ここだけ =====
+    const LIFF_ID = "2008777809-IHfmxD85";
+    const FORM_BASE =
+      "https://docs.google.com/forms/d/e/1FAIpQLSeUVjtH30VVX-D9KSRPt5UTOKTip_9MA513jNv-czjptu3EVQ/viewform";
+    // LINE userId を入れる質問の entry ID
+    const ENTRY_ID = "entry.1264552984";
+    // =======================
+
+    (async () => {
+      try {
+        document.getElementById("status").textContent = "LINE情報を取得しています…";
+
+        await liff.init({ liffId: LIFF_ID });
+
+        if (!liff.isLoggedIn()) {
+          // 未ログインならログインして戻る
+          liff.login({ redirectUri: location.href });
+          return;
+        }
+
+        const context = liff.getContext();
+        const userId = context && context.userId;
+
+        if (!userId) {
+          document.getElementById("status").textContent =
+            "ユーザー情報を取得できませんでした。";
+          return;
+        }
+
+        // Googleフォーム（プレフィル）へリダイレクト
+        const redirectUrl =
+          `${FORM_BASE}?usp=pp_url&${ENTRY_ID}=${encodeURIComponent(userId)}`;
+
+        document.getElementById("status").textContent = "フォームへ移動します…";
+        window.location.replace(redirectUrl);
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById("status").textContent =
+          "エラーが発生しました。もう一度お試しください。";
+      }
+    })();
+  </script>
+</body>
+</html>
