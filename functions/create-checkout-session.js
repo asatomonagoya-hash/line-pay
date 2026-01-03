@@ -1,5 +1,3 @@
-import Stripe from "stripe";
-
 export async function onRequest(context) {
   const { env, request } = context;
 
@@ -7,49 +5,27 @@ export async function onRequest(context) {
   const lineUserId = reqUrl.searchParams.get("line_user_id");
 
   if (!lineUserId) {
+    return new Response(JSON.stringify({ error: "line_user_id is required" }), {
+      status: 400,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
+  if (!env.STRIPE_PAYMENT_LINK_URL) {
     return new Response(
-      JSON.stringify({ error: "line_user_id is required" }),
-      { status: 400, headers: { "content-type": "application/json" } }
+      JSON.stringify({ error: "Missing env: STRIPE_PAYMENT_LINK_URL" }),
+      {
+        status: 500,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      }
     );
   }
 
-  if (!env.STRIPE_SECRET_KEY) {
-    return new Response(
-      JSON.stringify({ error: "Missing STRIPE_SECRET_KEY" }),
-      { status: 500, headers: { "content-type": "application/json" } }
-    );
-  }
+  // Payment Link URL に client_reference_id を付与して返す
+  const checkoutUrl = new URL(env.STRIPE_PAYMENT_LINK_URL);
+  checkoutUrl.searchParams.set("client_reference_id", lineUserId);
 
-  try {
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY);
-
-    // Payment Link URL を取得
-    let paymentLinkUrl = env.STRIPE_PAYMENT_LINK_URL;
-
-    if (!paymentLinkUrl) {
-      const pl = await stripe.paymentLinks.retrieve(
-        env.STRIPE_PAYMENT_LINK_ID
-      );
-      paymentLinkUrl = pl.url;
-    }
-
-    // client_reference_id に line_user_id を付与
-    const checkoutUrl = new URL(paymentLinkUrl);
-    checkoutUrl.searchParams.set("client_reference_id", lineUserId);
-
-    return new Response(
-      JSON.stringify({
-        url: checkoutUrl.toString(),
-      }),
-      { headers: { "content-type": "application/json" } }
-    );
-  } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: "Failed to build payment link",
-        message: err.message,
-      }),
-      { status: 500, headers: { "content-type": "application/json" } }
-    );
-  }
+  return new Response(JSON.stringify({ url: checkoutUrl.toString() }, null, 2), {
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
 }
