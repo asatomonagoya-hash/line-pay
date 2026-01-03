@@ -1,136 +1,67 @@
 // /functions/create-checkout-session.js
 import Stripe from "stripe";
 
-/**
- * Cloudflare Pages Functions
- * - GET /functions/create-checkout-session?line_user_id=Uxxxx
- * - Stripe Checkout Session を作成（Payment Link を利用）
- * - metadata と payment_intent_data.metadata に line_user_id を確実に入れる
- * - { url } を JSON で返す
- */
-export async function onRequestGet(context) {
+export async function onRequest(context) {
   const { env, request } = context;
 
-  // ---- CORS（必要に応じて） ----
-  // LINE内ブラウザやフロントから呼ぶ場合に備えて付与（不要なら削除OK）
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
+  const url = new URL(request.url);
+  const line_user_id = url.searchParams.get("line_user_id");
 
-  // Preflight（OPTIONS）
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
+  if (!line_user_id) {
+    return new Response(JSON.stringify({ error: "line_user_id is required" }, null, 2), {
+      status: 400,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
+  if (!env.STRIPE_SECRET_KEY) {
+    return new Response(JSON.stringify({ error: "Missing env: STRIPE_SECRET_KEY" }, null, 2), {
+      status: 500,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
+  // ✅ ここは「plink_...」でも「https://buy.stripe.com/...」でもOKにする
+  if (!env.STRIPE_PAYMENT_LINK_ID && !env.STRIPE_PAYMENT_LINK_URL) {
+    return new Response(
+      JSON.stringify(
+        { error: "Missing env: STRIPE_PAYMENT_LINK_ID or STRIPE_PAYMENT_LINK_URL" },
+        null,
+        2
+      ),
+      { status: 500, headers: { "content-type": "application/json; charset=utf-8" } }
+    );
   }
 
   try {
-    // ---- 必須Envチェック ----
-    const required = [
-      "STRIPE_SECRET_KEY",
-      "STRIPE_PAYMENT_LINK_ID",
-      "SUCCESS_URL",
-      "CANCEL_URL",
-    ];
-    for (const k of required) {
-      if (!env[k] || String(env[k]).trim() === "") {
-        return json(
-          { error: `Missing environment variable: ${k}` },
-          500,
-          corsHeaders
-        );
-      }
-    }
-
-    // ---- line_user_id 取得（クエリ or JSONボディの両対応）----
-    const url = new URL(request.url);
-    let line_user_id = url.searchParams.get("line_user_id");
-
-    // GET想定ですが、将来POSTにしても動くように保険
-    if (!line_user_id && request.method === "POST") {
-      const ct = request.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        const body = await request.json().catch(() => null);
-        if (body && body.line_user_id) line_user_id = String(body.line_user_id);
-      }
-    }
-
-    if (!line_user_id) {
-      return json(
-        { error: "line_user_id is required. e.g. ?line_user_id=Uxxxx" },
-        400,
-        corsHeaders
-      );
-    }
-
-    // ---- Stripe 初期化 ----
     const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
-    // ---- Checkout Session 作成（Payment Linkを利用）----
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment", // Payment LinkでもOK。明示しておく
-      payment_link: env.STRIPE_PAYMENT_LINK_ID,
-
-      // 遷移先
-      success_url: env.SUCCESS_URL,
-      cancel_url: env.CANCEL_URL,
-
-      // ✅ Makeで拾う本命：Session metadata
-      metadata: {
-        line_user_id,
-      },
-
-      // ✅ 保険：見やすい・参照しやすい（nullでも動くが入れておく）
-      client_reference_id: line_user_id,
-
-      // ✅ さらに保険：PaymentIntent側にも入れる（payment_intent.succeeded等でも拾える）
-      payment_intent_data: {
-        metadata: {
-          line_user_id,
-        },
-      },
-    });
-
-    if (!session?.url) {
-      return json(
-        { error: "Stripe session created but session.url is null" },
-        500,
-        corsHeaders
-      );
+    // 1) Payment Link URLを確定（URL直指定 or plinkから取得）
+    let paymentLinkUrl = env.STRIPE_PAYMENT_LINK_URL;
+    if (!paymentLinkUrl) {
+      const pl = await stripe.paymentLinks.retrieve(env.STRIPE_PAYMENT_LINK_ID);
+      paymentLinkUrl = pl.url; // ← ここが buy.stripe.com のURL
     }
 
-    return json(
-      {
-        url: session.url,
-        session_id: session.id,
-      },
-      200,
-      corsHeaders
+    // 2) client_reference_id に line_user_id を入れて返す
+    const out = new URL(paymentLinkUrl);
+    out.searchParams.set("client_reference_id", line_user_id);
+
+    return new Response(
+      JSON.stringify(
+        {
+          url: out.toString(),
+          note: "Open this URL to start checkout. line_user_id is set as client_reference_id.",
+        },
+        null,
+        2
+      ),
+      { headers: { "content-type": "application/json; charset=utf-8" } }
     );
   } catch (err) {
-    // Stripeエラーが分かりやすいように整形
-    const message =
-      (err && (err.raw?.message || err.message)) || "Unknown error";
-    const type = err && (err.type || err.raw?.type);
+    const message = err?.raw?.message || err?.message || "Unknown error";
+    const type = err?.type || err?.raw?.type;
 
-    return json(
-      {
-        error: "Failed to create checkout session",
-        message,
-        type,
-      },
-      500,
-      corsHeaders
-    );
-  }
-}
-
-function json(obj, status = 200, extraHeaders = {}) {
-  return new Response(JSON.stringify(obj, null, 2), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...extraHeaders,
-    },
-  });
-}
+    return new Response(
+      JSON.stringify(
+        { error: "Failed to buil
