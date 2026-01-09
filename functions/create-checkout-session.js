@@ -1,102 +1,81 @@
 import Stripe from "stripe";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
-
 export async function onRequest({ request, env }) {
-  // CORS preflight
-  if (request.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
     const url = new URL(request.url);
 
-    // 受け取り方：GETでもPOSTでもOKにする
-    // 例）/create-checkout-session?line_user_id=Uxxx&plan=bronze
-    let lineUserId = url.searchParams.get("line_user_id");
-    let plan = url.searchParams.get("plan");
+    // ① クエリ取得
+    const lineUserId = url.searchParams.get("line_user_id");
+    const plan = url.searchParams.get("plan"); // bronze / silver / gold
 
-    if (request.method === "POST") {
-      const ct = request.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        const body = await request.json().catch(() => ({}));
-        lineUserId = body?.line_user_id ?? body?.userId ?? lineUserId;
-        plan = body?.plan ?? plan;
-      }
+    if (!lineUserId) {
+      return new Response(
+        JSON.stringify({ error: "line_user_id is required" }),
+        { status: 400 }
+      );
     }
 
-    // バリデーション：LINE userId
-    if (!lineUserId || typeof lineUserId !== "string" || !lineUserId.startsWith("U") || lineUserId.length < 20) {
-      return new Response(JSON.stringify({ error: "line_user_id is required", line_user_id: lineUserId }), {
-        status: 400,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+    // ② plan → Stripe Price ID 変換
+    let priceId;
+    switch (plan) {
+      case "bronze":
+        priceId = env.PRICE_BRONZE;
+        break;
+      case "silver":
+        priceId = env.PRICE_SILVER;
+        break;
+      case "gold":
+        priceId = env.PRICE_GOLD;
+        break;
+      default:
+        return new Response(
+          JSON.stringify({ error: "plan is invalid", plan }),
+          { status: 400 }
+        );
     }
 
-    // バリデーション：plan
-    const PRICE_MAP = {
-      bronze: env.PRICE_BRONZE,
-      silver: env.PRICE_SILVER,
-      gold: env.PRICE_GOLD,
-    };
+    // ③ Stripe 初期化
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 
-    if (!plan || !PRICE_MAP[plan]) {
-      return new Response(JSON.stringify({ error: "plan is invalid", plan }), {
-        status: 400,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
-    }
-
-    if (!env.STRIPE_SECRET_KEY) {
-      return new Response(JSON.stringify({ error: "Missing env: STRIPE_SECRET_KEY" }), {
-        status: 500,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
-    }
-
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-      apiVersion: "2023-10-16",
-    });
-
-    const priceId = PRICE_MAP[plan];
-
-    // ✅ Checkout Session（subscription）を作る
+    // ④ Checkout Session 作成（subscription）
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: env.SUCCESS_URL,
+      cancel_url: env.CANCEL_URL,
 
-      // 決済完了後に Make が拾える
+      // ★ ここが最重要（Makeで拾う）
       metadata: {
         userId: lineUserId,
-        plan,
-        priceId,
+        plan: plan,
       },
-
-      // 毎月の invoice.paid でも subscription 経由で拾える（超重要）
       subscription_data: {
         metadata: {
           userId: lineUserId,
-          plan,
-          priceId,
+          plan: plan,
         },
       },
-
-      success_url: env.SUCCESS_URL || "https://line.me",
-      cancel_url: env.CANCEL_URL || "https://line.me",
     });
 
-    return new Response(JSON.stringify({ url: session.url }), {
-      status: 200,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ url: session.url }),
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
   } catch (err) {
-    return new Response(JSON.stringify({ error: err?.message || String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      { status: 500 }
+    );
   }
 }
