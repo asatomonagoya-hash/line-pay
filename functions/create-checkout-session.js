@@ -1,107 +1,143 @@
 import Stripe from "stripe";
 
-// ✅ 許可する Origin（必要なら追加OK）
-const ALLOWED_ORIGINS = new Set([
-  "https://line-pay.pages.dev",
-  "https://liff.line.me",
-  "https://access.line.me",
-]);
+/**
+ * CORS 設定（LIFF / curl 両対応）
+ */
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
-function getCorsHeaders(request) {
-  const origin = request.headers.get("Origin") || "";
-  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "https://line-pay.pages.dev";
-
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-    "Content-Type": "application/json; charset=utf-8",
-  };
-}
-
-function jsonResponse(obj, status, headers) {
-  return new Response(JSON.stringify(obj), { status, headers });
+/**
+ * JSONレスポンス統一関数
+ */
+function jsonResponse(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ...corsHeaders,
+    },
+  });
 }
 
 export async function onRequest({ request, env }) {
-  const headers = getCorsHeaders(request);
-
-  // ✅ OPTIONS（preflight）
+  /**
+   * OPTIONS（preflight）対応
+   */
   if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  /**
+   * POST 以外拒否
+   */
   if (request.method !== "POST") {
-    return jsonResponse({ ok: false, error: "Method Not Allowed" }, 405, headers);
+    return jsonResponse({ error: "Method Not Allowed" }, 405);
   }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  const userId = body.userId;
+  const plan = body.plan;
+
+  /**
+   * debug モード（環境変数確認用）
+   */
+  if (plan === "debug") {
+    return jsonResponse({
+      SUCCESS_URL: env.SUCCESS_URL,
+      CANCEL_URL: env.CANCEL_URL,
+      PRICE_BRONZE: env.PRICE_BRONZE ? "set" : "missing",
+      PRICE_SILVER: env.PRICE_SILVER ? "set" : "missing",
+      PRICE_GOLD: env.PRICE_GOLD ? "set" : "missing",
+      STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY ? "set" : "missing",
+    });
+  }
+
+  if (!userId || !plan) {
+    return jsonResponse({ error: "userId or plan is missing" }, 400);
+  }
+
+  /**
+   * plan → Price ID
+   */
+  const priceMap = {
+    bronze: env.PRICE_BRONZE,
+    silver: env.PRICE_SILVER,
+    gold: env.PRICE_GOLD,
+  };
+
+  const priceId = priceMap[plan];
+  if (!priceId) {
+    return jsonResponse(
+      { error: "plan is invalid or PRICE env missing", plan },
+      400
+    );
+  }
+
+  /**
+   * URLチェック（Stripe投入前に落とす）
+   */
+  try {
+    new URL(env.SUCCESS_URL);
+    new URL(env.CANCEL_URL);
+  } catch {
+    return jsonResponse(
+      {
+        error: "SUCCESS_URL or CANCEL_URL is not a valid absolute URL",
+        successUrl: env.SUCCESS_URL,
+        cancelUrl: env.CANCEL_URL,
+      },
+      500
+    );
+  }
+
+  /**
+   * Stripe 初期化
+   */
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+    apiVersion: "2024-06-20",
+    httpClient: Stripe.createFetchHttpClient(),
+  });
 
   try {
-    const body = await request.json();
-    const userId = body.userId;
-    const plan = body.plan; // bronze / silver / gold / debug
-
-    // 改行・空白混入を吸収
-    const successUrl = (env.SUCCESS_URL || "").trim();
-    const cancelUrl = (env.CANCEL_URL || "").trim();
-
-    // debug
-    if (plan === "debug") {
-      return jsonResponse(
-        {
-          SUCCESS_URL: successUrl,
-          CANCEL_URL: cancelUrl,
-          PRICE_BRONZE: env.PRICE_BRONZE ? "set" : "missing",
-          PRICE_SILVER: env.PRICE_SILVER ? "set" : "missing",
-          PRICE_GOLD: env.PRICE_GOLD ? "set" : "missing",
-          STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY ? "set" : "missing",
-          ORIGIN: request.headers.get("Origin") || null,
-        },
-        200,
-        headers
-      );
-    }
-
-    if (!userId || !plan) {
-      return jsonResponse({ ok: false, error: "userId or plan is missing" }, 400, headers);
-    }
-
-    const priceMap = {
-      bronze: env.PRICE_BRONZE,
-      silver: env.PRICE_SILVER,
-      gold: env.PRICE_GOLD,
-    };
-    const priceId = priceMap[plan];
-    if (!priceId) {
-      return jsonResponse({ ok: false, error: "plan is invalid or price env missing", plan }, 400, headers);
-    }
-
-    // URL validation
-    if (!successUrl || !cancelUrl) {
-      return jsonResponse({ ok: false, error: "SUCCESS_URL/CANCEL_URL missing" }, 500, headers);
-    }
-    new URL(successUrl);
-    new URL(cancelUrl);
-
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-      apiVersion: "2024-06-20",
-      httpClient: Stripe.createFetchHttpClient(),
-    });
-
+    /**
+     * Checkout Session 作成（subscription）
+     */
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl,
+      success_url: `${env.SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: env.CANCEL_URL,
+
+      // Make / Webhook 用
       metadata: { userId, plan },
-      subscription_data: { metadata: { userId, plan } },
+      subscription_data: {
+        metadata: { userId, plan },
+      },
       client_reference_id: userId,
     });
 
-    return jsonResponse({ ok: true, url: session.url, id: session.id }, 200, headers);
+    return jsonResponse({
+      ok: true,
+      url: session.url,
+      id: session.id,
+    });
   } catch (err) {
-    return jsonResponse({ ok: false, error: err?.message || String(err) }, 500, headers);
+    return jsonResponse(
+      {
+        ok: false,
+        error: err?.message || String(err),
+      },
+      500
+    );
   }
 }
