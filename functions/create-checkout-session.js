@@ -34,11 +34,15 @@ export async function onRequest({ request, env }) {
     const userId = body.userId;
     const plan = body.plan; // bronze / silver / gold / debug
 
+    // ✅ success/cancel URL（必須）※改行・空白混入を吸収
+    const successUrl = (env.SUCCESS_URL || "").trim();
+    const cancelUrl = (env.CANCEL_URL || "").trim();
+
     // ✅ デバッグ：plan=debug で env をそのまま返す（原因特定用）
     if (plan === "debug") {
       return jsonResponse({
-        SUCCESS_URL: env.SUCCESS_URL,
-        CANCEL_URL: env.CANCEL_URL,
+        SUCCESS_URL: successUrl,
+        CANCEL_URL: cancelUrl,
         PRICE_BRONZE: env.PRICE_BRONZE ? "set" : "missing",
         PRICE_SILVER: env.PRICE_SILVER ? "set" : "missing",
         PRICE_GOLD: env.PRICE_GOLD ? "set" : "missing",
@@ -65,19 +69,18 @@ export async function onRequest({ request, env }) {
       );
     }
 
-    // ✅ success/cancel URL（必須）
-    const successUrl = env.SUCCESS_URL;
-    const cancelUrl = env.CANCEL_URL;
-
     if (!successUrl || !cancelUrl) {
       return jsonResponse(
-        { error: "SUCCESS_URL or CANCEL_URL is missing", successUrl, cancelUrl },
+        {
+          error: "SUCCESS_URL or CANCEL_URL is missing",
+          successUrl,
+          cancelUrl,
+        },
         500
       );
     }
 
     // ✅ URLとして正しいかを先にチェック（Stripeに投げる前に落とす）
-    //    （ここで落ちたら env の値が変）
     try {
       new URL(successUrl);
       new URL(cancelUrl);
