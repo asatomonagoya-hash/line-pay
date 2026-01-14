@@ -1,21 +1,35 @@
 import Stripe from "stripe";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "https://line-pay.pages.dev",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
 export async function onRequest({ request, env }) {
+
+  // ✅ OPTIONS（preflight）対応 ← 超重要
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
+    });
+  }
+
   try {
-    const url = new URL(request.url);
+    // ✅ JSONで受け取る（LIFF fetch 前提）
+    const body = await request.json();
+    const lineUserId = body.userId;
+    const plan = body.plan; // bronze / silver / gold
 
-    // ① クエリ取得
-    const lineUserId = url.searchParams.get("line_user_id");
-    const plan = url.searchParams.get("plan"); // bronze / silver / gold
-
-    if (!lineUserId) {
+    if (!lineUserId || !plan) {
       return new Response(
-        JSON.stringify({ error: "line_user_id is required" }),
-        { status: 400 }
+        JSON.stringify({ error: "userId or plan is missing" }),
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // ② plan → Stripe Price ID 変換
+    // ② plan → Stripe Price ID
     let priceId;
     switch (plan) {
       case "bronze":
@@ -30,7 +44,7 @@ export async function onRequest({ request, env }) {
       default:
         return new Response(
           JSON.stringify({ error: "plan is invalid", plan }),
-          { status: 400 }
+          { status: 400, headers: corsHeaders }
         );
     }
 
@@ -47,35 +61,38 @@ export async function onRequest({ request, env }) {
           quantity: 1,
         },
       ],
-      success_url: env.SUCCESS_URL,
+      success_url: env.SUCCESS_URL + "?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: env.CANCEL_URL,
 
-      // ★ ここが最重要（Makeで拾う）
+      // ★ Make で拾うため必須
       metadata: {
         userId: lineUserId,
-        plan: plan,
+        plan,
       },
       subscription_data: {
         metadata: {
           userId: lineUserId,
-          plan: plan,
+          plan,
         },
       },
+      client_reference_id: lineUserId,
     });
 
     return new Response(
       JSON.stringify({ url: session.url }),
       {
+        status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          ...corsHeaders,
         },
       }
     );
+
   } catch (err) {
     return new Response(
       JSON.stringify({ error: err.message }),
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
